@@ -20,6 +20,10 @@ struct TodoListView: View {
         vm.todoIndices(for: activeFilter)
     }
 
+    private var visibleTodoIDs: [Todo.ID] {
+        visibleIndices.map { vm.todos[$0].id }
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             header
@@ -89,8 +93,8 @@ struct TodoListView: View {
             } else {
                 ScrollView {
                     VStack(spacing: 10) {
-                        ForEach(visibleIndices, id: \.self) { index in
-                            todoRow(for: index)
+                        ForEach(visibleTodoIDs, id: \.self) { todoID in
+                            todoRow(for: todoID)
                         }
                     }
                     .padding(.vertical, 2)
@@ -151,106 +155,117 @@ struct TodoListView: View {
         .clipShape(RoundedRectangle(cornerRadius: 14))
     }
 
-    private func todoRow(for index: Int) -> some View {
-        let todo = vm.todos[index]
-
-        return VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 12) {
-                Button(action: {
-                    withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-                        vm.toggleTodo(id: todo.id)
+    @ViewBuilder
+    private func todoRow(for todoID: Todo.ID) -> some View {
+        if let todo = todo(for: todoID) {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 12) {
+                    Button(action: {
+                        withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                            vm.toggleTodo(id: todo.id)
+                        }
+                    }) {
+                        Image(systemName: todo.completed ? "checkmark.circle.fill" : "circle")
+                            .foregroundStyle(todo.completed ? .green : .gray)
                     }
-                }) {
-                    Image(systemName: todo.completed ? "checkmark.circle.fill" : "circle")
-                        .foregroundStyle(todo.completed ? .green : .gray)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(todo.completed ? "Mark incomplete" : "Mark complete")
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(todo.completed ? "Mark incomplete" : "Mark complete")
 
-                TextField(
-                    "Task title",
-                    text: Binding(
-                        get: { vm.todos[index].title },
-                        set: { vm.updateTodoTitle(id: todo.id, title: $0) }
+                    TextField("Task title", text: titleBinding(for: todoID))
+                        .textFieldStyle(.plain)
+                        .font(.subheadline.weight(.semibold))
+                        .strikethrough(todo.completed)
+
+                    Spacer()
+
+                    Button(action: {
+                        vm.togglePin(id: todo.id)
+                    }) {
+                        Image(systemName: todo.isPinned ? "pin.fill" : "pin")
+                            .foregroundStyle(todo.isPinned ? .yellow : .secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .help(todo.isPinned ? "Unpin task" : "Pin task")
+
+                    Button(action: {
+                        withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                            vm.removeTodo(id: todo.id)
+                        }
+                    }) {
+                        Image(systemName: "trash")
+                            .foregroundStyle(.red.opacity(0.8))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Delete task")
+                }
+
+                HStack(spacing: 12) {
+                    Picker("Priority", selection: priorityBinding(for: todoID)) {
+                        ForEach(TodoPriority.allCases) { priority in
+                            Text(priority.title).tag(priority)
+                        }
+                    }
+                    .frame(width: 110)
+
+                    HStack(spacing: 6) {
+                        Image(systemName: todo.priority.symbolName)
+                            .foregroundStyle(todo.priority.tint)
+                        Text(priorityLabel(for: todo.priority))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    DatePicker(
+                        "Due Date",
+                        selection: dueDateBinding(for: todoID),
+                        displayedComponents: .date
                     )
-                )
-                .textFieldStyle(.plain)
-                .font(.subheadline.weight(.semibold))
-                .strikethrough(todo.completed)
+                    .labelsHidden()
 
-                Spacer()
-
-                Button(action: {
-                    vm.togglePin(id: todo.id)
-                }) {
-                    Image(systemName: todo.isPinned ? "pin.fill" : "pin")
-                        .foregroundStyle(todo.isPinned ? .yellow : .secondary)
-                }
-                .buttonStyle(.plain)
-                .help(todo.isPinned ? "Unpin task" : "Pin task")
-
-                Button(action: {
-                    withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-                        vm.removeTodo(id: todo.id)
+                    Button("Clear Date") {
+                        vm.updateTodoDueDate(id: todo.id, dueDate: nil)
                     }
-                }) {
-                    Image(systemName: "trash")
-                        .foregroundStyle(.red.opacity(0.8))
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Delete task")
-            }
+                    .buttonStyle(.borderless)
 
-            HStack(spacing: 12) {
-                Picker(
-                    "Priority",
-                    selection: Binding(
-                        get: { vm.todos[index].priority },
-                        set: { vm.updateTodoPriority(id: todo.id, priority: $0) }
-                    )
-                ) {
-                    ForEach(TodoPriority.allCases) { priority in
-                        Text(priority.title).tag(priority)
-                    }
-                }
-                .frame(width: 110)
+                    Spacer()
 
-                HStack(spacing: 6) {
-                    Image(systemName: vm.todos[index].priority.symbolName)
-                        .foregroundStyle(vm.todos[index].priority.tint)
-                    Text(priorityLabel(for: vm.todos[index].priority))
+                    Text(todoTimingText(for: todo))
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(todoTimingColor(for: todo))
                 }
-
-                DatePicker(
-                    "Due Date",
-                    selection: Binding(
-                        get: { vm.todos[index].dueDate ?? Date.now },
-                        set: { vm.updateTodoDueDate(id: todo.id, dueDate: $0) }
-                    ),
-                    displayedComponents: .date
-                )
-                .labelsHidden()
-
-                Button("Clear Date") {
-                    vm.updateTodoDueDate(id: todo.id, dueDate: nil)
-                }
-                .buttonStyle(.borderless)
-
-                Spacer()
-
-                Text(todoTimingText(for: vm.todos[index]))
-                    .font(.caption)
-                    .foregroundStyle(todoTimingColor(for: vm.todos[index]))
             }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 12)
+            .background(.thinMaterial.opacity(0.45))
+            .clipShape(RoundedRectangle(cornerRadius: 14))
+            .transition(.asymmetric(insertion: .opacity.combined(with: .move(edge: .bottom)),
+                                    removal: .opacity.combined(with: .move(edge: .top))))
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 12)
-        .background(.thinMaterial.opacity(0.45))
-        .clipShape(RoundedRectangle(cornerRadius: 14))
-        .transition(.asymmetric(insertion: .opacity.combined(with: .move(edge: .bottom)),
-                                removal: .opacity.combined(with: .move(edge: .top))))
+    }
+
+    private func todo(for id: Todo.ID) -> Todo? {
+        vm.todos.first { $0.id == id }
+    }
+
+    private func titleBinding(for id: Todo.ID) -> Binding<String> {
+        Binding(
+            get: { todo(for: id)?.title ?? "" },
+            set: { vm.updateTodoTitle(id: id, title: $0) }
+        )
+    }
+
+    private func priorityBinding(for id: Todo.ID) -> Binding<TodoPriority> {
+        Binding(
+            get: { todo(for: id)?.priority ?? .medium },
+            set: { vm.updateTodoPriority(id: id, priority: $0) }
+        )
+    }
+
+    private func dueDateBinding(for id: Todo.ID) -> Binding<Date> {
+        Binding(
+            get: { todo(for: id)?.dueDate ?? Date.now },
+            set: { vm.updateTodoDueDate(id: id, dueDate: $0) }
+        )
     }
 
     private var emptyStateTitle: String {

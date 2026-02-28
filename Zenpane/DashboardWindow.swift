@@ -19,7 +19,7 @@ class DashboardWindow: NSWindow {
     init() {
         let hostingView = NSHostingView(rootView: DashboardView())
         let screenSize = NSScreen.main?.frame.size ?? CGSize(width: 1440, height: 900)
-        let windowSize = CGSize(width: 1080, height: 720)
+        let windowSize = CGSize(width: 1280, height: 820)
         let frame = CGRect(
             x: (screenSize.width - windowSize.width) / 2,
             y: (screenSize.height - windowSize.height) / 2,
@@ -56,4 +56,17 @@ class DashboardWindow: NSWindow {
             }
         }
     }
+
+    func toggleVisibility() {
+        if isVisible {
+            orderOut(nil)
+        } else {
+            showDashboard()
+        }
+    }
+    func showDashboard() {
+        NSApp.activate(ignoringOtherApps: true)
+        makeKeyAndOrderFront(nil)
+    }
 }
+

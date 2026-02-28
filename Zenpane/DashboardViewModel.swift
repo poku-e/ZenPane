@@ -7,6 +7,7 @@
 
 import Foundation
 import SwiftUI
+import Combine
 
 struct Quote: Codable {
     let content: String
@@ -114,6 +115,27 @@ struct Todo: Identifiable, Codable, Hashable {
         self.dueDate = dueDate
         self.isPinned = isPinned
         self.createdAt = createdAt
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case title
+        case completed
+        case priority
+        case dueDate
+        case isPinned
+        case createdAt
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
+        title = try container.decode(String.self, forKey: .title)
+        completed = try container.decodeIfPresent(Bool.self, forKey: .completed) ?? false
+        priority = try container.decodeIfPresent(TodoPriority.self, forKey: .priority) ?? .medium
+        dueDate = try container.decodeIfPresent(Date.self, forKey: .dueDate)
+        isPinned = try container.decodeIfPresent(Bool.self, forKey: .isPinned) ?? false
+        createdAt = try container.decodeIfPresent(Date.self, forKey: .createdAt) ?? .now
     }
 }
 
@@ -500,7 +522,7 @@ final class DashboardViewModel: ObservableObject {
     }
 
     var completedCount: Int {
-        todos.filter(\.completed).count
+        todos.filter { $0.completed }.count
     }
 
     private func loadSavedQuotes() {
@@ -562,4 +584,3 @@ private extension Calendar {
         return self.date(byAdding: DateComponents(day: 1, second: -1), to: start) ?? date
     }
 }
-

@@ -29,7 +29,8 @@ struct DashboardView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
 
                     NotesView()
-                        .frame(width: 320, maxHeight: .infinity, alignment: .top)
+                        .frame(width: 320, alignment: .top)
+                        .frame(maxHeight: .infinity, alignment: .top)
 
                     VStack(spacing: 20) {
                         QuoteCardView(
@@ -51,7 +52,8 @@ struct DashboardView: View {
                             onRefresh: { vm.fetchWeather() }
                         )
                     }
-                    .frame(width: 320, maxHeight: .infinity, alignment: .top)
+                    .frame(width: 320, alignment: .top)
+                    .frame(maxHeight: .infinity, alignment: .top)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             }
@@ -259,7 +261,7 @@ private struct TodayFocusCard: View {
         .clipShape(RoundedRectangle(cornerRadius: 18))
     }
 
-    private static func dateText(for date: Date) -> String {
+    private nonisolated static func dateText(for date: Date) -> String {
         if Calendar.current.isDateInToday(date) {
             return "Due today"
         }
