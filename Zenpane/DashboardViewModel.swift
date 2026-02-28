@@ -8,6 +8,7 @@
 import Foundation
 import SwiftUI
 import Combine
+import EventKit
 
 struct Quote: Codable {
     let content: String
@@ -97,6 +98,7 @@ struct Todo: Identifiable, Codable, Hashable {
     var priority: TodoPriority
     var dueDate: Date?
     var isPinned: Bool
+    var reminderIdentifier: String?
     let createdAt: Date
 
     init(
@@ -106,6 +108,7 @@ struct Todo: Identifiable, Codable, Hashable {
         priority: TodoPriority = .medium,
         dueDate: Date? = .now,
         isPinned: Bool = false,
+        reminderIdentifier: String? = nil,
         createdAt: Date = .now
     ) {
         self.id = id
@@ -114,6 +117,7 @@ struct Todo: Identifiable, Codable, Hashable {
         self.priority = priority
         self.dueDate = dueDate
         self.isPinned = isPinned
+        self.reminderIdentifier = reminderIdentifier
         self.createdAt = createdAt
     }
 
@@ -124,6 +128,7 @@ struct Todo: Identifiable, Codable, Hashable {
         case priority
         case dueDate
         case isPinned
+        case reminderIdentifier
         case createdAt
     }
 
@@ -135,6 +140,7 @@ struct Todo: Identifiable, Codable, Hashable {
         priority = try container.decodeIfPresent(TodoPriority.self, forKey: .priority) ?? .medium
         dueDate = try container.decodeIfPresent(Date.self, forKey: .dueDate)
         isPinned = try container.decodeIfPresent(Bool.self, forKey: .isPinned) ?? false
+        reminderIdentifier = try container.decodeIfPresent(String.self, forKey: .reminderIdentifier)
         createdAt = try container.decodeIfPresent(Date.self, forKey: .createdAt) ?? .now
     }
 }
@@ -196,6 +202,8 @@ final class DashboardViewModel: ObservableObject {
     private let settings = AppSettings()
     private let quoteStorageKey = "savedQuotes"
     private let todoStorageKey = "todos"
+    private let reminderStore = EKEventStore()
+    private var reminderAccessState: ReminderAccessState = .idle
 
     func loadData() {
         loadTodos()
@@ -203,6 +211,9 @@ final class DashboardViewModel: ObservableObject {
         activeQuoteTheme = settings.preferredQuoteTheme
         fetchQuote()
         fetchWeather()
+        Task {
+            _ = await ensureRemindersAccess()
+        }
     }
 
     func refreshDashboard() {
@@ -412,42 +423,78 @@ final class DashboardViewModel: ObservableObject {
     }
 
     func addTodo(title: String, priority: TodoPriority = .medium, dueDate: Date? = .now, pinned: Bool = false) {
-        todos.append(Todo(title: title, priority: priority, dueDate: dueDate, isPinned: pinned))
+        let todo = Todo(title: title, priority: priority, dueDate: dueDate, isPinned: pinned)
+        todos.append(todo)
         saveTodos()
+
+        Task {
+            await syncReminder(for: todo.id)
+        }
     }
 
     func toggleTodo(id: Todo.ID) {
         guard let index = todos.firstIndex(where: { $0.id == id }) else { return }
         todos[index].completed.toggle()
         saveTodos()
+
+        Task {
+            await syncReminder(for: id)
+        }
     }
 
     func removeTodo(id: Todo.ID) {
+        let reminderIdentifier = todos.first(where: { $0.id == id })?.reminderIdentifier
         todos.removeAll { $0.id == id }
         saveTodos()
+
+        Task {
+            await deleteReminder(withIdentifier: reminderIdentifier)
+        }
     }
 
     func removeCompletedTodos() {
+        let reminderIdentifiers = todos
+            .filter(\.completed)
+            .compactMap(\.reminderIdentifier)
+
         todos.removeAll { $0.completed }
         saveTodos()
+
+        Task {
+            for reminderIdentifier in reminderIdentifiers {
+                await deleteReminder(withIdentifier: reminderIdentifier)
+            }
+        }
     }
 
     func updateTodoTitle(id: Todo.ID, title: String) {
         guard let index = todos.firstIndex(where: { $0.id == id }) else { return }
         todos[index].title = title
         saveTodos()
+
+        Task {
+            await syncReminder(for: id)
+        }
     }
 
     func updateTodoPriority(id: Todo.ID, priority: TodoPriority) {
         guard let index = todos.firstIndex(where: { $0.id == id }) else { return }
         todos[index].priority = priority
         saveTodos()
+
+        Task {
+            await syncReminder(for: id)
+        }
     }
 
     func updateTodoDueDate(id: Todo.ID, dueDate: Date?) {
         guard let index = todos.firstIndex(where: { $0.id == id }) else { return }
         todos[index].dueDate = dueDate
         saveTodos()
+
+        Task {
+            await syncReminder(for: id)
+        }
     }
 
     func togglePin(id: Todo.ID) {
@@ -564,6 +611,161 @@ final class DashboardViewModel: ObservableObject {
             ("Consistency compounds faster than intensity.", "Zenpane")
         ]
     ]
+
+    private enum ReminderAccessState {
+        case idle
+        case granted
+        case denied
+    }
+
+    private func ensureRemindersAccess() async -> Bool {
+        switch reminderAccessState {
+        case .granted:
+            return true
+        case .denied:
+            return false
+        case .idle:
+            break
+        }
+
+        let status = EKEventStore.authorizationStatus(for: .reminder)
+
+        if #available(macOS 14.0, *) {
+            switch status {
+            case .fullAccess, .writeOnly:
+                reminderAccessState = .granted
+                return true
+            case .notDetermined:
+                do {
+                    let granted = try await reminderStore.requestFullAccessToReminders()
+                    reminderAccessState = granted ? .granted : .denied
+                    return granted
+                } catch {
+                    reminderAccessState = .denied
+                    return false
+                }
+            case .denied, .restricted:
+                reminderAccessState = .denied
+                return false
+            @unknown default:
+                reminderAccessState = .denied
+                return false
+            }
+        } else {
+            switch status {
+            case .authorized:
+                reminderAccessState = .granted
+                return true
+            case .fullAccess, .writeOnly:
+                reminderAccessState = .granted
+                return true
+            case .notDetermined:
+                do {
+                    let granted = try await requestLegacyRemindersAccess()
+                    reminderAccessState = granted ? .granted : .denied
+                    return granted
+                } catch {
+                    reminderAccessState = .denied
+                    return false
+                }
+            case .denied, .restricted:
+                reminderAccessState = .denied
+                return false
+            @unknown default:
+                reminderAccessState = .denied
+                return false
+            }
+        }
+    }
+
+    private func requestLegacyRemindersAccess() async throws -> Bool {
+        try await withCheckedThrowingContinuation { continuation in
+            reminderStore.requestAccess(to: .reminder) { granted, error in
+                if let error {
+                    continuation.resume(throwing: error)
+                } else {
+                    continuation.resume(returning: granted)
+                }
+            }
+        }
+    }
+
+    private func syncReminder(for id: Todo.ID) async {
+        guard await ensureRemindersAccess() else { return }
+        guard let todo = todos.first(where: { $0.id == id }) else { return }
+
+        if todo.completed {
+            await markReminderCompleted(for: todo)
+        } else {
+            await upsertReminder(for: todo)
+        }
+    }
+
+    private func upsertReminder(for todo: Todo) async {
+        let reminder = reminder(for: todo.reminderIdentifier) ?? EKReminder(eventStore: reminderStore)
+
+        guard let calendar = reminder.calendar ?? reminderStore.defaultCalendarForNewReminders() else {
+            return
+        }
+
+        reminder.calendar = calendar
+        reminder.title = todo.title
+        reminder.priority = todo.priority.reminderPriority
+        reminder.notes = "Created by Zenpane"
+        reminder.isCompleted = false
+
+        if let dueDate = todo.dueDate {
+            reminder.dueDateComponents = Calendar.current.dateComponents([.year, .month, .day], from: dueDate)
+        } else {
+            reminder.dueDateComponents = nil
+        }
+
+        do {
+            try reminderStore.save(reminder, commit: true)
+
+            if reminder.calendarItemIdentifier != todo.reminderIdentifier,
+               let index = todos.firstIndex(where: { $0.id == todo.id }) {
+                todos[index].reminderIdentifier = reminder.calendarItemIdentifier
+                saveTodos()
+            }
+        } catch {
+            return
+        }
+    }
+
+    private func markReminderCompleted(for todo: Todo) async {
+        guard let reminder = reminder(for: todo.reminderIdentifier) else {
+            return
+        }
+
+        reminder.isCompleted = true
+
+        do {
+            try reminderStore.save(reminder, commit: true)
+        } catch {
+            return
+        }
+    }
+
+    private func deleteReminder(withIdentifier identifier: String?) async {
+        guard await ensureRemindersAccess() else { return }
+        guard let reminder = reminder(for: identifier) else { return }
+
+        do {
+            try reminderStore.remove(reminder, commit: true)
+        } catch {
+            return
+        }
+    }
+
+    private func reminder(for identifier: String?) -> EKReminder? {
+        guard let identifier,
+              let item = reminderStore.calendarItem(withIdentifier: identifier) as? EKReminder else {
+            return nil
+        }
+
+        return item
+    }
 }
 private extension TodoPriority {
     var sortOrder: Int {
@@ -574,6 +776,17 @@ private extension TodoPriority {
             return 1
         case .low:
             return 2
+        }
+    }
+
+    var reminderPriority: Int {
+        switch self {
+        case .high:
+            return 1
+        case .medium:
+            return 5
+        case .low:
+            return 9
         }
     }
 }

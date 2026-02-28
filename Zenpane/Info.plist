@@ -11,5 +11,7 @@
 		<key>NSAllowsArbitraryLoads</key>
 		<true/>
 	</dict>
+	<key>NSRemindersUsageDescription</key>
+	<string>Zenpane uses Reminders to mirror your tasks in Apple Reminders.</string>
 </dict>
 </plist>

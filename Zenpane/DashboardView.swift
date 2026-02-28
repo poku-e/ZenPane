@@ -10,56 +10,72 @@ import SwiftUI
 struct DashboardView: View {
     @StateObject private var vm = DashboardViewModel()
     @StateObject private var settings = AppSettings()
+    private let scrollIndicatorInset: CGFloat = 10
+    private let contentPadding = EdgeInsets(top: 24, leading: 24, bottom: 32, trailing: 50)
 
     var body: some View {
-        ZStack {
-            VisualEffectBlur(material: .hudWindow, blendingMode: .withinWindow)
-                .ignoresSafeArea()
-                .cornerRadius(24)
+        GeometryReader { proxy in
+            let layout = dashboardLayout(for: proxy.size)
 
-            VStack(alignment: .leading, spacing: 20) {
-                header
-                todayStrip
-                metricsRow
+            ZStack {
+                VisualEffectBlur(material: .hudWindow, blendingMode: .withinWindow)
+                    .clipShape(RoundedRectangle(cornerRadius: 24))
 
-                HStack(alignment: .top, spacing: 20) {
-                    VStack(spacing: 20) {
-                        TodoListView(vm: vm)
+                ScrollView([.vertical, .horizontal], showsIndicators: false) {
+                    VStack(alignment: .leading, spacing: 20) {
+                        header
+                        todayStrip(quickActionsWidth: layout.quickActionsWidth)
+                        metricsRow
+
+                        HStack(alignment: .top, spacing: 20) {
+                            VStack(spacing: 20) {
+                                TodoListView(vm: vm)
+                            }
+                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+
+                            NotesView()
+                                .frame(width: layout.sideColumnWidth, alignment: .top)
+                                .frame(maxHeight: .infinity, alignment: .top)
+
+                            VStack(spacing: 20) {
+                                QuoteCardView(
+                                    quote: vm.quote,
+                                    author: vm.author,
+                                    theme: vm.activeQuoteTheme,
+                                    savedQuoteCount: vm.savedQuotes.count,
+                                    isSaved: vm.isCurrentQuoteSaved,
+                                    onRefresh: { vm.fetchQuote() },
+                                    onSave: { vm.saveCurrentQuote() }
+                                )
+
+                                WeatherCardView(
+                                    location: vm.weatherLocation,
+                                    headline: vm.weatherHeadline,
+                                    detail: vm.weatherDetail,
+                                    secondaryDetail: vm.weatherSecondaryDetail,
+                                    forecast: vm.weatherForecast,
+                                    onRefresh: { vm.fetchWeather() }
+                                )
+                            }
+                            .frame(width: layout.sideColumnWidth, alignment: .top)
+                            .frame(maxHeight: .infinity, alignment: .top)
+                        }
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                     }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-
-                    NotesView()
-                        .frame(width: 320, alignment: .top)
-                        .frame(maxHeight: .infinity, alignment: .top)
-
-                    VStack(spacing: 20) {
-                        QuoteCardView(
-                            quote: vm.quote,
-                            author: vm.author,
-                            theme: vm.activeQuoteTheme,
-                            savedQuoteCount: vm.savedQuotes.count,
-                            isSaved: vm.isCurrentQuoteSaved,
-                            onRefresh: { vm.fetchQuote() },
-                            onSave: { vm.saveCurrentQuote() }
-                        )
-
-                        WeatherCardView(
-                            location: vm.weatherLocation,
-                            headline: vm.weatherHeadline,
-                            detail: vm.weatherDetail,
-                            secondaryDetail: vm.weatherSecondaryDetail,
-                            forecast: vm.weatherForecast,
-                            onRefresh: { vm.fetchWeather() }
-                        )
-                    }
-                    .frame(width: 320, alignment: .top)
-                    .frame(maxHeight: .infinity, alignment: .top)
+                    .padding(contentPadding)
+                    .frame(
+                        minWidth: max(layout.minimumContentWidth, proxy.size.width),
+                        minHeight: max(layout.minimumContentHeight, proxy.size.height),
+                        alignment: .topLeading
+                    )
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                .padding(scrollIndicatorInset)
+                .clipped()
             }
-            .padding(24)
+            .clipShape(RoundedRectangle(cornerRadius: 24))
+            .compositingGroup()
         }
-        .frame(width: 1280, height: 820)
         .onAppear { vm.loadData() }
         .onChange(of: settings.weatherLatitude) { _, _ in vm.fetchWeather() }
         .onChange(of: settings.weatherLongitude) { _, _ in vm.fetchWeather() }
@@ -93,7 +109,7 @@ struct DashboardView: View {
         .clipShape(RoundedRectangle(cornerRadius: 20))
     }
 
-    private var todayStrip: some View {
+    private func todayStrip(quickActionsWidth: CGFloat) -> some View {
         HStack(spacing: 16) {
             TodayFocusCard(
                 focusTodos: vm.focusTodos,
@@ -106,7 +122,7 @@ struct DashboardView: View {
                 quoteTheme: vm.activeQuoteTheme,
                 onRefreshAll: { vm.refreshDashboard() }
             )
-            .frame(width: 280)
+            .frame(width: quickActionsWidth)
         }
     }
 
@@ -155,6 +171,26 @@ struct DashboardView: View {
             return "Good Evening, \(name)."
         }
     }
+
+    private func dashboardLayout(for size: CGSize) -> DashboardLayout {
+        let availableWidth = max(size.width - 48, 0)
+        let sideColumnWidth = min(max(availableWidth * 0.23, 280), 340)
+        let quickActionsWidth = min(max(availableWidth * 0.2, 260), 320)
+
+        return DashboardLayout(
+            sideColumnWidth: sideColumnWidth,
+            quickActionsWidth: quickActionsWidth,
+            minimumContentWidth: 1320,
+            minimumContentHeight: 860
+        )
+    }
+}
+
+private struct DashboardLayout {
+    let sideColumnWidth: CGFloat
+    let quickActionsWidth: CGFloat
+    let minimumContentWidth: CGFloat
+    let minimumContentHeight: CGFloat
 }
 
 private struct DashboardMetricCard: View {

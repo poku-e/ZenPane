@@ -18,17 +18,20 @@ import SwiftUI
 class DashboardWindow: NSWindow {
     init() {
         let hostingView = NSHostingView(rootView: DashboardView())
-        let screenSize = NSScreen.main?.frame.size ?? CGSize(width: 1440, height: 900)
-        let windowSize = CGSize(width: 1280, height: 820)
+        let screenFrame = NSScreen.main?.visibleFrame ?? CGRect(x: 0, y: 0, width: 1440, height: 900)
+        let windowSize = CGSize(
+            width: min(1440, screenFrame.width * 0.92),
+            height: min(900, screenFrame.height * 0.92)
+        )
         let frame = CGRect(
-            x: (screenSize.width - windowSize.width) / 2,
-            y: (screenSize.height - windowSize.height) / 2,
+            x: screenFrame.origin.x + (screenFrame.width - windowSize.width) / 2,
+            y: screenFrame.origin.y + (screenFrame.height - windowSize.height) / 2,
             width: windowSize.width,
             height: windowSize.height
         )
 
         super.init(contentRect: frame,
-                   styleMask: [.titled, .fullSizeContentView],
+                   styleMask: [.titled, .fullSizeContentView, .resizable],
                    backing: .buffered,
                    defer: false)
 
@@ -39,6 +42,7 @@ class DashboardWindow: NSWindow {
         hasShadow = true
         level = .floating
         isMovableByWindowBackground = true
+        minSize = CGSize(width: 1100, height: 760)
 
         hostingView.wantsLayer = true
         hostingView.layer?.cornerRadius = 24
@@ -69,4 +73,3 @@ class DashboardWindow: NSWindow {
         makeKeyAndOrderFront(nil)
     }
 }
-
