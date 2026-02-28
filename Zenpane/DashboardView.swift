@@ -8,6 +8,7 @@
 import SwiftUI
 
 struct DashboardView: View {
+    @Environment(\.openSettings) private var openSettings
     @StateObject private var vm = DashboardViewModel()
     @StateObject private var settings = AppSettings()
     private let scrollIndicatorInset: CGFloat = 10
@@ -76,6 +77,7 @@ struct DashboardView: View {
             .clipShape(RoundedRectangle(cornerRadius: 24))
             .compositingGroup()
         }
+        .preferredColorScheme(settings.preferredAppearance.colorScheme)
         .onAppear { vm.loadData() }
         .onChange(of: settings.weatherLatitude) { _, _ in vm.fetchWeather() }
         .onChange(of: settings.weatherLongitude) { _, _ in vm.fetchWeather() }
@@ -96,12 +98,24 @@ struct DashboardView: View {
 
             Spacer()
 
-            VStack(alignment: .trailing, spacing: 6) {
-                Text(Date.now, format: .dateTime.weekday(.wide))
-                    .font(.headline)
-                Text(Date.now, format: .dateTime.month(.abbreviated).day().year())
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
+            HStack(alignment: .top, spacing: 14) {
+                VStack(alignment: .trailing, spacing: 6) {
+                    Text(Date.now, format: .dateTime.weekday(.wide))
+                        .font(.headline)
+                    Text(Date.now, format: .dateTime.month(.abbreviated).day().year())
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+
+                Button(action: { openSettings() }) {
+                    Image(systemName: "gearshape.fill")
+                        .font(.headline)
+                        .frame(width: 34, height: 34)
+                }
+                .buttonStyle(.plain)
+                .background(.thinMaterial.opacity(0.5))
+                .clipShape(RoundedRectangle(cornerRadius: 10))
+                .help("Open settings")
             }
         }
         .padding(20)

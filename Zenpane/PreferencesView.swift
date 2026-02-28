@@ -12,6 +12,18 @@ struct PreferencesView: View {
                     .textFieldStyle(.roundedBorder)
             }
 
+            Section("Appearance") {
+                Picker("Mode", selection: Binding(
+                    get: { settings.preferredAppearance },
+                    set: { settings.preferredAppearance = $0 }
+                )) {
+                    ForEach(AppAppearance.allCases) { appearance in
+                        Text(appearance.title).tag(appearance)
+                    }
+                }
+                .pickerStyle(.segmented)
+            }
+
             Section("Motivation") {
                 Picker("Quote Theme", selection: $settings.preferredQuoteTheme) {
                     ForEach(quoteThemes, id: \.self) { theme in
@@ -21,23 +33,43 @@ struct PreferencesView: View {
             }
 
             Section("Weather") {
-                HStack {
-                    TextField("City", text: $settings.weatherCity)
-                        .textFieldStyle(.roundedBorder)
-                    TextField("Lat", value: $settings.weatherLatitude, format: .number)
-                        .frame(width: 100)
-                        .textFieldStyle(.roundedBorder)
-                    TextField("Lon", value: $settings.weatherLongitude, format: .number)
-                        .frame(width: 100)
-                        .textFieldStyle(.roundedBorder)
+                HStack(alignment: .center, spacing: 12) {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Current Weather Location")
+                            .font(.subheadline.weight(.semibold))
+
+                        Text(settings.weatherCity)
+                            .font(.body)
+
+                        Text(
+                            "\(settings.weatherLatitude.formatted(.number.precision(.fractionLength(4)))), " +
+                            "\(settings.weatherLongitude.formatted(.number.precision(.fractionLength(4))))"
+                        )
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    }
+
+                    Spacer()
+
+                    Button(settings.isUpdatingLocation ? "Locating..." : "Use Current Location") {
+                        settings.requestCurrentLocation()
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(settings.isUpdatingLocation)
                 }
-                Text("Weather data is provided by Weather.gov and supports US coordinates.")
+
+                Text(settings.locationStatusMessage)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                Text("Weather uses macOS Location Services to populate your current city and coordinates automatically.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
         }
         .padding(20)
         .frame(minWidth: 460)
+        .preferredColorScheme(settings.preferredAppearance.colorScheme)
     }
 }
 

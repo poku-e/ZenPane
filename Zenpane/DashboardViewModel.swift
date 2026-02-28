@@ -632,9 +632,12 @@ final class DashboardViewModel: ObservableObject {
 
         if #available(macOS 14.0, *) {
             switch status {
-            case .fullAccess, .writeOnly:
+            case .fullAccess:
                 reminderAccessState = .granted
                 return true
+            case .writeOnly:
+                reminderAccessState = .denied
+                return false
             case .notDetermined:
                 do {
                     let granted = try await reminderStore.requestFullAccessToReminders()

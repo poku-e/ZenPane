@@ -13,5 +13,11 @@
 	</dict>
 	<key>NSRemindersUsageDescription</key>
 	<string>Zenpane uses Reminders to mirror your tasks in Apple Reminders.</string>
+	<key>NSRemindersFullAccessUsageDescription</key>
+	<string>Zenpane needs full Reminders access to create, update, complete, and remove synced tasks.</string>
+	<key>NSRemindersWriteOnlyAccessUsageDescription</key>
+	<string>Zenpane can write tasks to Reminders, but full access is preferred for syncing updates.</string>
+	<key>NSLocationUsageDescription</key>
+	<string>Zenpane uses your location to set local weather automatically.</string>
 </dict>
 </plist>

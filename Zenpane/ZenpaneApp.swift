@@ -16,6 +16,7 @@ struct ZenpaneApp: App {
         Settings {
             PreferencesView()
                 .environmentObject(settings)
+                .preferredColorScheme(settings.preferredAppearance.colorScheme)
         }
     }
 }

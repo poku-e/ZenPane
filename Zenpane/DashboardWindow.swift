@@ -40,7 +40,7 @@ class DashboardWindow: NSWindow {
         titleVisibility = .hidden
         titlebarAppearsTransparent = true
         hasShadow = true
-        level = .floating
+        level = .normal
         isMovableByWindowBackground = true
         minSize = CGSize(width: 1100, height: 760)
 
