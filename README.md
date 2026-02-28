@@ -1,6 +1,6 @@
 # Zenpane
 
-Zenpane is a macOS personal dashboard built with SwiftUI. It combines task planning, weather, notes, and motivational context into a single floating glassmorphic workspace designed for day-to-day personal use.
+Zenpane is a macOS personal dashboard built with SwiftUI. It combines task planning, weather, notes, and motivational context into a single glassmorphic workspace designed for day-to-day personal use.
 
 The app is intentionally lightweight: one primary dashboard window, local persistence through `UserDefaults`/`AppStorage`, and a compact native macOS surface that can stay open throughout the day. It is structured as a personal command center rather than a traditional multi-window productivity suite.
 
@@ -20,13 +20,15 @@ Core goals:
 
 ### Dashboard Workspace
 
-The main window is a floating, resizable, rounded glass panel.
+The main window is a resizable, rounded glass panel.
 
 - Responsive multi-column dashboard layout
 - Scrollable content area when the window is smaller than the ideal layout
+- Hidden system scroll indicators for a cleaner presentation
 - Personalized greeting based on time of day and configured display name
 - “Today” strip that highlights focus items, overdue work, and quick actions
 - Summary metric cards for active queue, upcoming work, completed items, and saved quotes
+- Header settings button that opens the Settings window directly
 - Menu bar status item for quick dashboard access
 
 ### Todo Planning
@@ -80,7 +82,7 @@ The quote panel provides lightweight contextual motivation.
 The weather panel provides current conditions and short-range forecast context.
 
 - Fetches data from the US National Weather Service (`weather.gov`)
-- Uses configured city/latitude/longitude from preferences
+- Uses stored city/latitude/longitude in app settings
 - Shows current condition headline
 - Shows secondary forecast context
 - Shows a short multi-period forecast
@@ -91,8 +93,10 @@ The weather panel provides current conditions and short-range forecast context.
 The app includes a macOS Settings scene for lightweight customization.
 
 - Set display name for personalized greeting
+- Choose appearance mode (`System`, `Light`, `Dark`)
 - Set preferred quote theme
-- Configure weather city and coordinates
+- Use current macOS location to populate weather city and coordinates automatically
+- Review current resolved weather city and coordinates
 
 ## Technology Stack
 
@@ -103,6 +107,7 @@ The app includes a macOS Settings scene for lightweight customization.
   - `SwiftUI`
   - `AppKit`
   - `EventKit`
+  - `CoreLocation`
   - `Combine`
 - Persistence:
   - `UserDefaults`
@@ -162,6 +167,7 @@ Persisted items include:
 - Display name
 - Weather preferences
 - Preferred quote theme
+- Preferred appearance mode
 
 Storage is currently implemented through `UserDefaults` and `AppStorage`, which keeps the app simple but also means:
 
@@ -169,20 +175,42 @@ Storage is currently implemented through `UserDefaults` and `AppStorage`, which 
 - There is no cloud sync built into Zenpane itself
 - There is no explicit export/import flow yet
 
-## Apple Reminders Permissions
+## Permissions
+
+Zenpane currently uses two system permission domains.
+
+### Apple Reminders Permissions
 
 Zenpane requires permission to access Reminders if you want todo synchronization.
 
 Required configuration:
 
 - `NSRemindersUsageDescription` is included in `Info.plist`
+- `NSRemindersFullAccessUsageDescription` is included in `Info.plist`
+- `NSRemindersWriteOnlyAccessUsageDescription` is included in `Info.plist`
 - On first access, macOS should prompt for Reminders permission
+- The app requests full access because it needs to create, update, complete, and delete the same reminder records later
 
 Important runtime note:
 
 - If the app target is sandboxed, you may also need to enable the Reminders entitlement in Xcode under Signing & Capabilities (`Personal Information > Reminders`)
 
 Without that entitlement, Reminders access can still fail even if the usage description exists.
+
+### Location Permissions
+
+Zenpane can use macOS Location Services to configure weather automatically.
+
+Required configuration:
+
+- `NSLocationUsageDescription` is included in `Info.plist`
+- The user must allow location access when prompted
+
+Behavior:
+
+- The app requests the current location
+- It reverse-geocodes that location into a city name
+- It saves the resulting city, latitude, and longitude into app settings for weather lookups
 
 ## External Services
 
@@ -199,7 +227,7 @@ Zenpane currently uses two external data sources.
 - Endpoint family: `https://api.weather.gov/...`
 - Purpose: current and short-term forecast data
 - Constraint: intended for US locations
-- Behavior: uses configured latitude/longitude to resolve forecast endpoints
+- Behavior: uses the saved latitude/longitude to resolve forecast endpoints
 
 ## Running the App
 
@@ -222,6 +250,7 @@ On first launch, you should expect:
 - A menu bar item labeled `Zenpane`
 - Weather and quote data to begin loading automatically
 - A Reminders permission request if a task is created and Reminders access has not yet been granted
+- A Location Services permission request if the user chooses `Use Current Location` in Settings
 
 ## How Todo/Reminder Sync Works
 
@@ -264,7 +293,7 @@ Zenpane intentionally uses a macOS glassmorphic style rather than a dense utilit
 
 Design characteristics:
 
-- Rounded floating window
+- Rounded resizable window
 - Native visual effect blur
 - Layered material cards
 - Persistent overview layout
@@ -283,6 +312,7 @@ Current limitations worth noting:
 - Persistence is simple and local, not database-backed
 - The dashboard uses scrolling for smaller window sizes instead of a full breakpoint-driven layout collapse
 - Shortcut handling is view-local rather than globally coordinated
+- The app currently relies on macOS Settings/entitlement configuration for Reminders to work reliably during development
 
 ## Future Improvement Ideas
 
@@ -308,6 +338,13 @@ For Reminders integration specifically:
 - Never block local todo creation on EventKit access
 - Persist reminder identifiers so updates remain idempotent
 - Expect sandbox and entitlement issues during local development
+- Keep the full-access Reminders usage description aligned with the EventKit API being requested
+
+For location integration:
+
+- Keep Core Location requests user-initiated where possible
+- Treat reverse geocoding failures as non-fatal and retain the coordinates
+- Preserve the stored city/coordinates so weather can keep working after the initial location lookup
 
 ## License / Ownership
 
